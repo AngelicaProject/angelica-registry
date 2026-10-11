@@ -1,0 +1,85 @@
+name: Check
+
+# Checks a pull request without secrets: what it changes, that each changed
+# plugin builds from the source at its tag and its tests pass, and what it
+# declares compared with the catalog (docs/architecture/overview.md).
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: windows-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: registry
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          path: registry
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          repository: AngelicaProject/angelica
+          ref: main
+          path: angelica
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: 1.98.1
+          targets: wasm32-wasip2
+
+      - name: What the pull request changes
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git diff --name-only "$BASE"...HEAD > "$RUNNER_TEMP/changed.txt"
+          cat "$RUNNER_TEMP/changed.txt"
+          entries=$(grep -E '^plugins/[a-z0-9-]+\.toml$' "$RUNNER_TEMP/changed.txt" | while read -r path; do
+            if [ -f "$path" ]; then echo "$path"; fi
+          done | tr '\n' ' ')
+          echo "entries=$entries" >> "$GITHUB_OUTPUT"
+          if grep -q '^\.github/' "$RUNNER_TEMP/changed.txt"; then
+            echo "::notice::the pull request changes workflows: a maintainer reviews it"
+          fi
+
+      - name: Build the angelica tool
+        if: steps.changes.outputs.entries != ''
+        working-directory: angelica
+        run: cargo build --release --locked -p angelica-cli
+
+      - name: Build, test, and review each changed plugin
+        if: steps.changes.outputs.entries != ''
+        env:
+          ENTRIES: ${{ steps.changes.outputs.entries }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          tool="$GITHUB_WORKSPACE/angelica/target/release/angelica.exe"
+          for entry in $ENTRIES; do
+            id=$(basename "$entry" .toml)
+            repository=$(sed -n 's/^repository = "\(.*\)"$/\1/p' "$entry")
+            tag=$(sed -n 's/^tag = "\(.*\)"$/\1/p' "$entry")
+            echo "::group::$id $tag"
+            source="$GITHUB_WORKSPACE/plugin-$id"
+            git clone --quiet --depth 1 --branch "$tag" "https://github.com/$repository" "$source"
+            (cd "$source" && cargo test && cargo build --release --target wasm32-wasip2)
+            bash scripts/review-entry.sh "$tool" "$entry" "$RUNNER_TEMP/$id.json" "$BASE"
+            echo "::endgroup::"
+            {
+              echo "### $id $tag"
+              echo '```json'
+              cat "$RUNNER_TEMP/$id.json"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          done

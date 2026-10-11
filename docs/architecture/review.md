@@ -1,16 +1,14 @@
 # Review of submissions
 
-Review starts from the permission diff produced by the build.
+Only what does not merge by itself reaches a maintainer: a new plugin, a change of repository or author key, and an update that declares a permission, a host, or more memory than the catalog version. The review in the Check run's summary lists the plugin's permissions and hosts and what it adds.
 
-## What reviewers check
+## What a maintainer checks
 
-- **Permissions match the plugin's purpose.** Every permission and every listed map entry is needed by something the plugin describes.
-- **Network domains** belong to the plugin's author or to a named service the plugin documents.
-- **`game.act`** (acting for the player) is described in the plugin's description so players see it before installing.
-- **`game.memory`** (full game access) is accepted only when no named map entry or service can do the job; the reason is written in the pull request.
-- **Imported interfaces** of other plugins are used for their documented purpose.
-- **The source** builds from the stated commit without network access beyond fetching pinned dependencies.
+- **The permissions match the plugin's purpose,** as its description tells players. Every permission is needed by something the plugin does.
+- **Network hosts** belong to the plugin's author or to a service the plugin names.
+- **Acting for the player and reaching other players** are said in the description, so players see them before installing.
+- **The source at the tag** is the plugin the description promises; the sandbox enforces permissions, so the review decides whether they are justified, not whether the code escapes.
 
 ## Refusal
 
-A submission is refused when a permission is not justified, when the description hides what the plugin does with a permission, or when the build is not reproducible. The refusal names the permission or the step.
+A submission is refused when a permission is not justified or the description hides what the plugin does with it. The refusal names the permission.

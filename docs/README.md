@@ -11,9 +11,9 @@
 
 | Task | Read first |
 | --- | --- |
-| Publish or update a plugin | [`architecture/overview.md`](./architecture/overview.md), [`formats/entry-v1.md`](./formats/entry-v1.md) |
+| Publish or update a plugin | [`architecture/overview.md`](./architecture/overview.md), [catalog format](https://github.com/AngelicaProject/angelica/blob/main/docs/formats/catalog-v1.md) |
 | Review a submission | [`architecture/review.md`](./architecture/review.md) |
-| Change the published index | [`formats/index-v1.md`](./formats/index-v1.md) |
+| Change the published index | [catalog format](https://github.com/AngelicaProject/angelica/blob/main/docs/formats/catalog-v1.md) |
 | Understand a plugin's manifest | [plugin manifest v1](https://github.com/AngelicaProject/angelica/blob/main/docs/formats/plugin-manifest-v1.md) |
 | Prepare a branch, commit, or pull request | [`development/git.md`](./development/git.md), [`development/pull-requests.md`](./development/pull-requests.md) |
 | Investigate CI | [`development/ci.md`](./development/ci.md) |

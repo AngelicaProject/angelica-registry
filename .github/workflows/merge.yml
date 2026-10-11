@@ -1,0 +1,88 @@
+name: Merge
+
+# After Check passes on a pull request, merges it when it only updates one
+# plugin already in the catalog, from the same repository and author key,
+# declaring nothing more; otherwise it says why a maintainer reviews it.
+# The decision runs main's code on the pull request's data only: the entry
+# it changes, read through the API, and the plugin files of releases.
+on: # zizmor: ignore[dangerous-triggers]
+  workflow_run:
+    workflows: [Check]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  decide:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'pull_request'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+      HEAD_REPOSITORY: ${{ github.event.workflow_run.head_repository.full_name }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: registry
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          ref: main
+          fetch-depth: 0
+          path: registry
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          repository: AngelicaProject/angelica
+          ref: main
+          path: angelica
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: 1.98.1
+
+      - name: Find the pull request and what it changes
+        id: pull
+        run: |
+          number=$(gh pr list --repo "$GITHUB_REPOSITORY" --state open --search "$HEAD_SHA" --json number,headRefOid \
+            --jq ".[] | select(.headRefOid == \"$HEAD_SHA\") | .number" | head -1)
+          if [ -z "$number" ]; then echo "No open pull request at $HEAD_SHA"; exit 0; fi
+          files=$(gh pr view "$number" --repo "$GITHUB_REPOSITORY" --json files --jq '.files[].path')
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          count=$(echo "$files" | wc -l)
+          if [ "$count" = 1 ] && [[ "$files" =~ ^plugins/[a-z0-9-]+\.toml$ ]] && [ -f "$files" ]; then
+            echo "entry=$files" >> "$GITHUB_OUTPUT"
+          else
+            gh pr comment "$number" --repo "$GITHUB_REPOSITORY" \
+              --body "A maintainer reviews this pull request: only an update of one plugin already in the catalog merges by itself."
+          fi
+
+      - name: Build the angelica tool
+        if: steps.pull.outputs.entry != ''
+        working-directory: angelica
+        run: cargo build --release --locked -p angelica-cli
+
+      - name: Review and merge
+        if: steps.pull.outputs.entry != ''
+        env:
+          NUMBER: ${{ steps.pull.outputs.number }}
+          ENTRY: ${{ steps.pull.outputs.entry }}
+        run: |
+          work="$RUNNER_TEMP/entry"
+          mkdir -p "$work/plugins"
+          gh api "repos/$HEAD_REPOSITORY/contents/$ENTRY?ref=$HEAD_SHA" --jq .content | base64 -d > "$work/$ENTRY"
+          tool="$GITHUB_WORKSPACE/angelica/target/release/angelica.exe"
+          if ! bash scripts/review-entry.sh "$tool" "$work/$ENTRY" "$RUNNER_TEMP/review.json" origin/main; then
+            gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "The review failed; a maintainer looks at it. $(cat "$RUNNER_TEMP/review.json" 2>/dev/null)"
+            exit 0
+          fi
+          automatic=$(sed -n 's/.*"automatic":\(true\|false\).*/\1/p' "$RUNNER_TEMP/review.json")
+          if [ "$automatic" = "true" ]; then
+            gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "An update that declares nothing more: merging."
+            gh pr merge "$NUMBER" --repo "$GITHUB_REPOSITORY" --merge --match-head-commit "$HEAD_SHA"
+          else
+            gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "A maintainer reviews this pull request. Review: $(cat "$RUNNER_TEMP/review.json")"
+          fi

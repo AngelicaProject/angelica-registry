@@ -1,0 +1,99 @@
+name: Publish
+
+# When main changes, builds every plugin whose catalog version is not yet
+# published from the source at its tag, signs it with the release key (the
+# catalog is the author of what it publishes), publishes it behind its
+# catalog link, and publishes the signed index in the release `catalog`
+# (docs/architecture/overview.md).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ANGELICA_RELEASE_PUBLIC_KEY: ${{ vars.ANGELICA_RELEASE_PUBLIC_KEY }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: registry
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          path: registry
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          repository: AngelicaProject/angelica
+          ref: main
+          path: angelica
+      - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
+        with:
+          toolchain: 1.98.1
+          targets: wasm32-wasip2
+
+      - name: Build the angelica tool
+        working-directory: angelica
+        run: cargo build --release --locked -p angelica-cli
+
+      - name: Build and publish new versions
+        env:
+          ANGELICA_RELEASE_SIGNING_KEY: ${{ secrets.ANGELICA_RELEASE_SIGNING_KEY }}
+        run: |
+          tool="$GITHUB_WORKSPACE/angelica/target/release/angelica.exe"
+          key="$RUNNER_TEMP/release.key"
+          printf '%s' "$ANGELICA_RELEASE_SIGNING_KEY" > "$key"
+          mkdir -p dist
+          for entry in plugins/*.toml; do
+            [ -f "$entry" ] || continue
+            id=$(basename "$entry" .toml)
+            repository=$(sed -n 's/^repository = "\(.*\)"$/\1/p' "$entry")
+            tag=$(sed -n 's/^tag = "\(.*\)"$/\1/p' "$entry")
+            # A version already published keeps its file, so the index
+            # names the bytes players download.
+            gh release download "$id" --repo "$GITHUB_REPOSITORY" --pattern "$id.angelica" \
+              --dir "$RUNNER_TEMP/published-$id" 2>/dev/null || true
+            source="$GITHUB_WORKSPACE/plugin-$id"
+            git clone --quiet --depth 1 --branch "$tag" "https://github.com/$repository" "$source"
+            crate=$(sed -n '/^\[package\]/,/^\[/{s/^name = "\(.*\)"$/\1/p}' "$source/Cargo.toml" | tr '-' '_')
+            (cd "$source" && cargo build --release --target wasm32-wasip2)
+            "$tool" plugin pack "$source" --component "$source/target/wasm32-wasip2/release/$crate.wasm" \
+              --key "$key" --output "dist/$id.angelica"
+            if ! "$tool" plugin publish "$source" --component "$source/target/wasm32-wasip2/release/$crate.wasm" \
+              --github "$GITHUB_REPOSITORY" --key "$key" > "$RUNNER_TEMP/publish-$id.txt" 2>&1; then
+              if grep -q "already has version" "$RUNNER_TEMP/publish-$id.txt"; then
+                echo "$id $tag was published before; the index names the published file"
+                cp "$RUNNER_TEMP/published-$id/$id.angelica" "dist/$id.angelica"
+              else
+                cat "$RUNNER_TEMP/publish-$id.txt"
+                exit 1
+              fi
+            fi
+          done
+          rm -f "$key"
+
+      - name: Publish the index
+        env:
+          ANGELICA_RELEASE_SIGNING_KEY: ${{ secrets.ANGELICA_RELEASE_SIGNING_KEY }}
+        run: |
+          tool="$GITHUB_WORKSPACE/angelica/target/release/angelica.exe"
+          "$tool" release catalog --registry . --files dist \
+            --published "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --output dist/catalog.json
+          cat dist/catalog.json
+          if ! gh release view catalog --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create catalog --repo "$GITHUB_REPOSITORY" --title "Catalog" \
+              --notes "The signed index of the Angelica catalog, which Angelica reads."
+          fi
+          gh release upload catalog dist/catalog.json dist/catalog.json.sig --clobber --repo "$GITHUB_REPOSITORY"

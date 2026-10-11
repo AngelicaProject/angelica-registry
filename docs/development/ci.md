@@ -2,11 +2,10 @@
 
 ## Gates
 
-- Every entry follows [entry v1](../formats/entry-v1.md), and published versions were only appended to.
-- For a changed entry, the plugin builds from its commit with the pinned toolchain, packs with `angelica plugin pack`, and the permission diff is posted to the pull request.
+- **Check**: every changed entry builds from the source at its tag, the plugin's tests pass, and `angelica release review` accepts the release's plugin file (signed with the entry's author key, the entry's id and version). It runs with read-only permissions and no secrets.
 - Workflows pass `actionlint` and `zizmor`, with the workflow rules of the `angelica` repository.
 
-The build job has read-only permissions and no secrets; only the publish workflow on `main` can sign.
+Only Publish, on `main`, can sign; only Merge, after a passed Check, can merge.
 
 ## Failure handling
 
