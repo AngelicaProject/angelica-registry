@@ -46,7 +46,8 @@ jobs:
         run: |
           git diff --name-only "$BASE"...HEAD > "$RUNNER_TEMP/changed.txt"
           cat "$RUNNER_TEMP/changed.txt"
-          entries=$(grep -E '^plugins/[a-z0-9-]+\.toml$' "$RUNNER_TEMP/changed.txt" | while read -r path; do
+          # A pull request may change no entry: grep then finds none.
+          entries=$({ grep -E '^plugins/[a-z0-9-]+\.toml$' "$RUNNER_TEMP/changed.txt" || true; } | while read -r path; do
             if [ -f "$path" ]; then echo "$path"; fi
           done | tr '\n' ' ')
           echo "entries=$entries" >> "$GITHUB_OUTPUT"

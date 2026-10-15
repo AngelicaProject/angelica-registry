@@ -1,10 +1,10 @@
 # Review of submissions
 
-Only what does not merge by itself reaches a maintainer: a new plugin, a change of repository or author key, and an update that declares a permission, a host, or more memory than the catalog version. The review in the Check run's summary lists the plugin's permissions and hosts and what it adds.
+Only what does not merge by itself reaches a maintainer: a new plugin, a change of repository or author key, and an update that declares a permission, a game map domain it reads, acts in, or changes through Lens, a host, or more memory than the catalog version. The review in the Check run's summary lists the plugin's permissions and hosts and what it adds, game map domains included.
 
 ## What a maintainer checks
 
-- **The permissions match the plugin's purpose,** as its description tells players. Every permission is needed by something the plugin does.
+- **The permissions match the plugin's purpose,** as its description tells players. Every permission and game map domain is needed by something the plugin does.
 - **Network hosts** belong to the plugin's author or to a service the plugin names.
 - **Acting for the player and reaching other players** are said in the description, so players see them before installing.
 - **The source at the tag** is the plugin the description promises; the sandbox enforces permissions, so the review decides whether they are justified, not whether the code escapes.
