@@ -2,7 +2,8 @@ name: Check
 
 # Checks a pull request without secrets: what it changes, that each changed
 # plugin builds from the source at its tag and its tests pass, and what it
-# declares compared with the catalog (docs/architecture/overview.md).
+# declares compared with the catalog and, for a new plugin, the released
+# game map (docs/architecture/overview.md).
 on:
   pull_request:
 
@@ -34,6 +35,15 @@ jobs:
           repository: AngelicaProject/angelica
           ref: main
           path: angelica
+      - name: Find the released game map
+        id: map
+        run: echo "tag=$(gh release view --repo AngelicaProject/angelica-gamemap --json tagName --jq .tagName)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+          repository: AngelicaProject/angelica-gamemap
+          ref: ${{ steps.map.outputs.tag }}
+          path: gamemap
       - uses: dtolnay/rust-toolchain@7e38f4b43b4db5c8dd498af069a4f6196df1d067 # master
         with:
           toolchain: 1.98.1
@@ -75,7 +85,7 @@ jobs:
             source="$GITHUB_WORKSPACE/plugin-$id"
             git clone --quiet --depth 1 --branch "$tag" "https://github.com/$repository" "$source"
             (cd "$source" && cargo test && cargo build --release --target wasm32-wasip2)
-            bash scripts/review-entry.sh "$tool" "$entry" "$RUNNER_TEMP/$id.json" "$BASE"
+            bash scripts/review-entry.sh "$tool" "$entry" "$RUNNER_TEMP/$id.json" "$BASE" "$GITHUB_WORKSPACE/gamemap"
             echo "::endgroup::"
             {
               echo "### $id $tag"
