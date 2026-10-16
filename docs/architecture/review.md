@@ -1,6 +1,6 @@
 # Review of submissions
 
-Only what does not merge by itself reaches a maintainer: a new plugin, a change of repository or author key, and an update that declares a permission, a game map domain it reads, acts in, or changes through Lens, a host, or more memory than the catalog version. The review in the Check run's summary lists the plugin's permissions and hosts and what it adds, game map domains included.
+Only what does not merge by itself reaches a maintainer: a new plugin that acts for the player, uses the internet, or sees other players (by the classes of [permissions](https://github.com/AngelicaProject/angelica/blob/main/docs/architecture/permissions.md#classes), with the classes of game map domains read from the released map) or names a domain the released map does not describe; a change of repository or author key; and an update that declares a permission, a game map domain it reads, acts in, or changes through Lens, a host, or more memory than the catalog version. A new plugin that only shows things to the player or changes what the player sees merges by itself. The review in the Check run's summary lists the plugin's permissions and hosts and what it adds, game map domains included.
 
 ## What a maintainer checks
 
